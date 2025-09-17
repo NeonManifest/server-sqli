@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebSocket Chat</title>
+  </head>
+  <body>
+    <h1>Simple WebSocket Chat</h1>
+    <div>
+      <input
+        type="text"
+        id="username"
+        placeholder="Enter your username"
+        value="User"
+      />
+      <input type="text" id="messageInput" placeholder="Type your message..." />
+      <button onclick="sendMessage()">Send</button>
+    </div>
+    <div
+      id="chatMessages"
+      style="
+        height: 400px;
+        overflow-y: scroll;
+        border: 1px solid #ccc;
+        margin: 10px 0;
+        padding: 10px;
+      "
+    ></div>
+    <div id="status">Disconnected</div>
+    <script>
+      let ws;
+      const chatMessages = document.getElementById("chatMessages");
+      const status = document.getElementById("status");
+      const messageInput = document.getElementById("messageInput");
+
+      function connect() {
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const wsUrl = `${protocol}//${window.location.host}`;
+
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          status.textContent = "Connected";
+          status.style.color = "green";
+          addMessage("System", "Connected to chat server", "system");
+        };
+
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          if (data.type === "message") {
+            addMessage(data.username, data.message, "message");
+          } else if (data.type === "system") {
+            addMessage("System", data.message, "system");
+          }
+        };
+
+        ws.onclose = () => {
+          status.textContent = "Disconnected";
+          status.style.color = "red";
+          addMessage("System", "Disconnected from server", "system");
+
+          // Try to reconnect after 3 seconds
+          setTimeout(connect, 3000);
+        };
+
+        ws.onerror = (error) => {
+          console.error("WebSocket error:", error);
+          addMessage("System", "Connection error", "error");
+        };
+      }
+
+      function sendMessage() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          const username =
+            document.getElementById("username").value || "Anonymous";
+          const message = messageInput.value.trim();
+
+          if (message) {
+            ws.send(
+              JSON.stringify({
+                username: username,
+                message: message,
+              })
+            );
+
+            // Add message to chat immediately (optimistic update)
+            addMessage(username, message, "own-message");
+            messageInput.value = "";
+          }
+        } else {
+          addMessage("System", "Not connected to server", "error");
+        }
+      }
+
+      function addMessage(username, message, type) {
+        const messageDiv = document.createElement("div");
+        const timestamp = new Date().toLocaleTimeString();
+
+        messageDiv.innerHTML = `
+                <strong>${username}</strong> 
+                <span style="font-size: 0.8em; color: #666;">[${timestamp}]</span>: 
+                ${message}
+            `;
+
+        // Style based on message type
+        if (type === "system") {
+          messageDiv.style.color = "blue";
+          messageDiv.style.fontStyle = "italic";
+        } else if (type === "error") {
+          messageDiv.style.color = "red";
+        } else if (type === "own-message") {
+          messageDiv.style.color = "green";
+        }
+
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      // Handle Enter key press
+      messageInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          sendMessage();
+        }
+      });
+
+      // Connect when page loads
+      connect();
+    </script>
+  </body>
+</html>
